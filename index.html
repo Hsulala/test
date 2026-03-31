@@ -1,64 +1,75 @@
-<script>
-    // ⚠️ 這裡一定要換成 GAS 部署後的「網頁應用程式網址」
-    const gasWebUrl = "https://script.google.com/macros/s/XXXXX/exec"; 
-    let remitType = new URLSearchParams(window.location.search).get('type');
-    let gId = "";
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>資訊回報</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f8f9fa; }
+        h3 { color: #463629; margin-bottom: 20px; text-align: center; }
+        input { width: 100%; padding: 15px; margin-bottom: 15px; box-sizing: border-box; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; }
+        button { width: 100%; padding: 15px; background-color: #463629; color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; }
+        .label { font-size: 14px; color: #666; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <h3 id="title">載入中...</h3>
+    <div id="formArea"></div>
+    <button id="submitBtn" onclick="submitForm()">確認送出</button>
 
-    // 初始化 UI
-    const form = document.getElementById('formArea');
-    if(remitType === 'remit') {
-        document.getElementById('title').innerText = "回報匯款末五碼";
-        form.innerHTML = '<input type="text" id="code" inputmode="decimal" placeholder="請輸入末五碼">';
-    } else {
-        document.getElementById('title').innerText = "索取回郵信封";
-        form.innerHTML = '<div class="label">收件人</div><input type="text" id="name">' +
-                         '<div class="label">電話</div><input type="text" id="phone" inputmode="tel">' +
-                         '<div class="label">收件地址</div><input type="text" id="addr">';
-    }
+    <script>
+        const gasWebUrl = "這裡貼上你剛剛產生的GAS網址"; 
+        const params = new URLSearchParams(window.location.search);
+        const type = params.get('type');
+        let groupId = "";
 
-    liff.init({ liffId: "2007905512-tXrWly6E" }).then(() => {
-        if (!liff.isLoggedIn()) {
-            liff.login();
+        // 動態生成表單內容
+        const form = document.getElementById('formArea');
+        if (type === 'remit') {
+            document.getElementById('title').innerText = "回報匯款末五碼";
+            form.innerHTML = '<input type="text" id="code" inputmode="decimal" placeholder="請輸入末五碼">';
         } else {
+            document.getElementById('title').innerText = "索取回郵信封";
+            form.innerHTML = '<div class="label">收件人</div><input type="text" id="name">' +
+                             '<div class="label">電話</div><input type="text" id="phone" inputmode="tel">' +
+                             '<div class="label">地址</div><input type="text" id="addr">';
+        }
+
+        liff.init({ liffId: "2007905512-tXrWly6E" }).then(() => {
+            if (!liff.isLoggedIn()) liff.login();
             const context = liff.getContext();
-            gId = context.groupId || context.userId; // 如果在群組就抓 groupId
-            document.getElementById('loading').innerText = "系統已就緒 (ID: " + (gId ? "OK" : "N/A") + ")";
+            groupId = context.groupId || context.userId;
+            document.getElementById('title').append(" (已就緒)");
+        }).catch(err => alert("LIFF 錯誤: " + err));
+
+        function submitForm() {
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerText = "傳送中...";
+
+            let query = `?groupId=${groupId}&type=${type}`;
+            if (type === 'remit') {
+                const c = document.getElementById('code').value;
+                if(!c) return alert("請輸入末五碼");
+                query += `&code=${c}`;
+            } else {
+                const n = document.getElementById('name').value;
+                const p = document.getElementById('phone').value;
+                const a = document.getElementById('addr').value;
+                if(!n || !p || !a) return alert("請完整填寫資訊");
+                query += `&name=${encodeURIComponent(n)}&phone=${encodeURIComponent(p)}&addr=${encodeURIComponent(a)}`;
+            }
+
+            // 使用 no-cors 模式確保請求發出
+            fetch(gasWebUrl + query, { mode: 'no-cors' }).then(() => {
+                alert("回報成功！");
+                liff.closeWindow();
+            }).catch(err => {
+                alert("失敗: " + err);
+                btn.disabled = false;
+            });
         }
-    }).catch(err => alert("LIFF 初始化失敗: " + err));
-
-    function submitForm() {
-        const btn = document.getElementById('submitBtn');
-        if (!gId) {
-            alert("找不到群組資訊，請從 LINE 群組內開啟此連結");
-            return;
-        }
-
-        btn.disabled = true;
-        btn.innerText = "傳送中...";
-
-        let query = `?groupId=${gId}&type=${remitType}`;
-        if(remitType === 'remit') {
-            const code = document.getElementById('code').value;
-            if(!code) return alert("請輸入末五碼");
-            query += `&code=${code}`;
-        } else {
-            const n = document.getElementById('name').value;
-            const p = document.getElementById('phone').value;
-            const a = document.getElementById('addr').value;
-            if(!n || !p || !a) return alert("請填寫完整資訊");
-            query += `&name=${encodeURIComponent(n)}&phone=${encodeURIComponent(p)}&addr=${encodeURIComponent(a)}`;
-        }
-
-        // 使用 fetch 傳送
-        fetch(gasWebUrl + query, { method: 'GET', mode: 'no-cors' })
-        .then(() => {
-            alert("回報成功！視窗即將關閉");
-            liff.closeWindow();
-        })
-        .catch(err => {
-            alert("傳送失敗：" + err);
-            btn.disabled = false;
-            btn.innerText = "確認送出";
-        });
-    }
-</script>
+    </script>
+</body>
+</html>
