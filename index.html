@@ -3,60 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>續約資訊回報</title>
+    <title>資訊回報</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        body { font-family: sans-serif; padding: 20px; background-color: #f8f9fa; }
-        h3 { color: #463629; }
+        body { font-family: sans-serif; padding: 20px; text-align: center; background-color: #f8f9fa; }
+        h3 { color: #463629; margin-bottom: 20px; }
         input { 
-            width: 100%; padding: 12px; margin: 15px 0; 
-            box-sizing: border-box; font-size: 16px; 
-            border: 1px solid #ccc; border-radius: 4px;
+            width: 100%; padding: 15px; margin-bottom: 20px; 
+            box-sizing: border-box; font-size: 18px; 
+            border: 1px solid #ddd; border-radius: 8px;
         }
         button { 
-            width: 100%; padding: 15px; background: #463629; 
-            color: white; border: none; border-radius: 5px; 
-            font-size: 16px; font-weight: bold; cursor: pointer;
+            width: 100%; padding: 15px; background-color: #463629; 
+            color: white; border: none; border-radius: 8px; 
+            font-size: 18px; font-weight: bold;
         }
+        #loading { color: #888; font-size: 14px; margin-top: 10px; }
+        .hint { color: #d9534f; font-size: 14px; margin-bottom: 10px; text-align: left; }
     </style>
 </head>
 <body>
     <h3 id="title">資訊回報</h3>
-    <input type="text" id="dataInput" inputmode="decimal" pattern="[0-9]*" placeholder="請輸入號碼">
-    <button id="sendBtn" onclick="sendData()">確認送出</button>
+    <div id="hintBox" class="hint" style="display:none;">💡 請輸入您的收件地址、收件人與電話，我們將儘速寄出回郵信封。</div>
+    
+    <input type="text" id="dataInput" placeholder="請輸入資訊">
+    
+    <button onclick="sendData()">確認送出</button>
+    <div id="loading">系統初始化中...</div>
 
     <script>
+        let remitType = ""; 
         const urlParams = new URLSearchParams(window.location.search);
-        const type = urlParams.get('type');
-        if(type === 'remit') document.getElementById('title').innerText = "回報匯款末五碼";
-        if(type === 'cheque') document.getElementById('title').innerText = "回報掛號單號";
+        remitType = urlParams.get('type'); 
 
-        // 初始化 LIFF
+        // 根據 type 調整 UI
+        const inputEl = document.getElementById('dataInput');
+        if(remitType === 'remit') {
+            document.getElementById('title').innerText = "回報匯款末五碼";
+            inputEl.placeholder = "請輸入末五碼數字";
+            inputEl.inputMode = "decimal"; // 喚起數字鍵盤
+        } else if(remitType === 'cheque') {
+            document.getElementById('title').innerText = "索取回郵信封";
+            document.getElementById('hintBox').style.display = "block";
+            inputEl.placeholder = "例：台北市... 某某某收";
+            inputEl.inputMode = "text";    // 喚起文字鍵盤
+        }
+
         liff.init({ liffId: "2007905512-tXrWly6E" }).then(() => {
+            document.getElementById('loading').innerText = "系統已就緒";
             if (!liff.isLoggedIn()) {
                 liff.login();
             }
         }).catch((err) => {
-            console.error("LIFF Initialization failed", err);
+            alert("初始化失敗: " + err);
         });
 
         function sendData() {
             const val = document.getElementById('dataInput').value.trim();
             if (!val) {
-                alert("請輸入號碼");
+                alert("請填寫資訊");
                 return;
             }
 
-            const prefix = (type === 'remit') ? "匯款：" : "掛號：";
-            
-            // 使用 liff.sendMessages 將訊息傳回對話框
+            // 關鍵修改：前綴字必須跟 GAS 裡面判斷的一樣
+            const prefix = (remitType === 'remit') ? "匯款：" : "地址：";
+            const messageText = `【系統回報】${prefix}${val}`;
+
             liff.sendMessages([{
                 type: 'text',
-                text: `【系統回報】${prefix}${val}`
+                text: messageText
             }]).then(() => {
-                liff.closeWindow(); // 成功後關閉
+                liff.closeWindow();
             }).catch((err) => {
-                alert("錯誤：" + JSON.stringify(err));
+                alert("發送失敗：" + JSON.stringify(err));
             });
         }
     </script>
