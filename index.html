@@ -6,77 +6,56 @@
     <title>資訊回報</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        body { font-family: sans-serif; padding: 20px; text-align: center; background-color: #f8f9fa; }
-        h3 { color: #463629; margin-bottom: 20px; }
-        input { 
-            width: 100%; padding: 15px; margin-bottom: 20px; 
-            box-sizing: border-box; font-size: 18px; 
-            border: 1px solid #ddd; border-radius: 8px;
-        }
-        button { 
-            width: 100%; padding: 15px; background-color: #463629; 
-            color: white; border: none; border-radius: 8px; 
-            font-size: 18px; font-weight: bold;
-        }
-        #loading { color: #888; font-size: 14px; margin-top: 10px; }
-        .hint { color: #d9534f; font-size: 14px; margin-bottom: 10px; text-align: left; }
+        body { font-family: sans-serif; padding: 20px; background-color: #f8f9fa; }
+        input { width: 100%; padding: 12px; margin-bottom: 10px; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc; font-size: 16px; }
+        button { width: 100%; padding: 15px; background: #463629; color: white; border: none; border-radius: 8px; font-weight: bold; }
+        .label { font-size: 14px; color: #666; margin-bottom: 5px; text-align: left; }
     </style>
 </head>
 <body>
-    <h3 id="title">資訊回報</h3>
-    <div id="hintBox" class="hint" style="display:none;">💡 請輸入您的收件地址、收件人與電話，我們將儘速寄出回郵信封。</div>
-    
-    <input type="text" id="dataInput" placeholder="請輸入資訊">
-    
-    <button onclick="sendData()">確認送出</button>
-    <div id="loading">系統初始化中...</div>
+    <h3 id="title">載入中...</h3>
+    <div id="formArea"></div>
+    <button id="submitBtn" onclick="submitForm()">確認送出</button>
 
     <script>
-        let remitType = ""; 
-        const urlParams = new URLSearchParams(window.location.search);
-        remitType = urlParams.get('type'); 
+        const gasWebUrl = "你的_GAS_網頁應用程式網址"; // 👈 貼上 GAS 的部署網址
+        let remitType = new URLSearchParams(window.location.search).get('type');
+        let gId = "";
 
-        // 根據 type 調整 UI
-        const inputEl = document.getElementById('dataInput');
+        // 初始化 UI
+        const form = document.getElementById('formArea');
         if(remitType === 'remit') {
             document.getElementById('title').innerText = "回報匯款末五碼";
-            inputEl.placeholder = "請輸入末五碼數字";
-            inputEl.inputMode = "decimal"; // 喚起數字鍵盤
-        } else if(remitType === 'cheque') {
+            form.innerHTML = '<input type="text" id="code" inputmode="decimal" placeholder="請輸入末五碼">';
+        } else {
             document.getElementById('title').innerText = "索取回郵信封";
-            document.getElementById('hintBox').style.display = "block";
-            inputEl.placeholder = "例：台北市... 某某某收";
-            inputEl.inputMode = "text";    // 喚起文字鍵盤
+            form.innerHTML = '<div class="label">收件人</div><input type="text" id="name">' +
+                             '<div class="label">電話</div><input type="text" id="phone" inputmode="tel">' +
+                             '<div class="label">收件地址</div><input type="text" id="addr">';
         }
 
         liff.init({ liffId: "2007905512-tXrWly6E" }).then(() => {
-            document.getElementById('loading').innerText = "系統已就緒";
-            if (!liff.isLoggedIn()) {
-                liff.login();
-            }
-        }).catch((err) => {
-            alert("初始化失敗: " + err);
+            const context = liff.getContext();
+            gId = context.groupId; // 自動抓取群組 ID
         });
 
-        function sendData() {
-            const val = document.getElementById('dataInput').value.trim();
-            if (!val) {
-                alert("請填寫資訊");
-                return;
+        function submitForm() {
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerText = "傳送中...";
+
+            let query = `?groupId=${gId}&type=${remitType}`;
+            if(remitType === 'remit') {
+                query += `&code=${document.getElementById('code').value}`;
+            } else {
+                query += `&name=${document.getElementById('name').value}&phone=${document.getElementById('phone').value}&addr=${document.getElementById('addr').value}`;
             }
 
-            // 關鍵修改：前綴字必須跟 GAS 裡面判斷的一樣
-            const prefix = (remitType === 'remit') ? "匯款：" : "地址：";
-            const messageText = `【系統回報】${prefix}${val}`;
-
-            liff.sendMessages([{
-                type: 'text',
-                text: messageText
-            }]).then(() => {
+            // 後台傳送資料給 GAS
+            fetch(gasWebUrl + query, { mode: 'no-cors' }).then(() => {
+                alert("回報成功！視窗即將關閉");
                 liff.closeWindow();
-            }).catch((err) => {
-                alert("發送失敗：" + JSON.stringify(err));
-            });
+            }).catch(err => alert("出錯了：" + err));
         }
     </script>
 </body>
