@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>續約資訊回報</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        input { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; background: #463629; color: white; border: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h3 id="title">資訊回報</h3>
+    <input type="text" id="dataInput" placeholder="請輸入號碼">
+    <button onclick="sendData()">確認送出</button>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const type = urlParams.get('type'); // remit 或 cheque
+        if(type === 'remit') document.getElementById('title').innerText = "回報匯款末五碼";
+        if(type === 'cheque') document.getElementById('title').innerText = "回報掛號單號";
+
+        liff.init({ liffId: "你的_LIFF_ID" }).then(() => {
+            if (!liff.isLoggedIn()) liff.login();
+        });
+
+        function sendData() {
+            const val = document.getElementById('dataInput').value;
+            const prefix = (type === 'remit') ? "匯款：" : "掛號：";
+            liff.sendMessages([{
+                type: 'text',
+                text: `【系統回報】${prefix}${val}`
+            }]).then(() => {
+                liff.closeWindow();
+            });
+        }
+    </script>
+</body>
+</html>
