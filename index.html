@@ -60,33 +60,51 @@
         }).catch(err => alert("LIFF 錯誤: " + err));
 
         function submitData() {
-            const btn = document.getElementById('submitBtn');
-            if(btn.disabled) return;
-            btn.disabled = true;
-            btn.innerText = "傳送中...";
+    const btn = document.getElementById('submitBtn');
+    if(btn.disabled) return;
+    btn.disabled = true;
+    btn.innerText = "傳送中...";
 
-            let query = `?groupId=${groupId}&type=${type}`;
-            if (type === 'remit') {
-                const c = document.getElementById('code').value;
-                if(!c) { btn.disabled = false; return alert("請輸入末五碼"); }
-                query += `&code=${encodeURIComponent(c)}`;
-            } else {
-                const n = document.getElementById('name').value;
-                const p = document.getElementById('phone').value;
-                const a = document.getElementById('addr').value;
-                if(!n || !p || !a) { btn.disabled = false; return alert("請填寫完整資訊"); }
-                query += `&name=${encodeURIComponent(n)}&phone=${encodeURIComponent(p)}&addr=${encodeURIComponent(a)}`;
-            }
+    // 1. 抓取資料
+    let msgText = ""; // 準備發送給群組的文字
+    let query = `?groupId=${groupId}&type=${type}`;
 
-            fetch(gasWebUrl + query, { mode: 'no-cors' }).then(() => {
-                alert("回報成功！");
-                liff.closeWindow();
-            }).catch(err => {
-                alert("傳送失敗：" + err);
-                btn.disabled = false;
-                btn.innerText = "確認送出";
-            });
-        }
+    if (type === 'remit') {
+        const c = document.getElementById('code').value.trim();
+        if(!c) { btn.disabled = false; return alert("請輸入末五碼"); }
+        query += `&code=${encodeURIComponent(c)}`;
+        msgText = "💰 我已完成匯款回報，末五碼為：" + c;
+    } else {
+        const n = document.getElementById('name').value.trim();
+        const p = document.getElementById('phone').value.trim();
+        const a = document.getElementById('addr').value.trim();
+        if(!n || !p || !a) { btn.disabled = false; return alert("請填寫完整資訊"); }
+        query += `&name=${encodeURIComponent(n)}&phone=${encodeURIComponent(p)}&addr=${encodeURIComponent(a)}`;
+        msgText = "✉️ 我已填寫支票收件資訊，請查收。";
+    }
+
+    // 2. 先透過 API 隱密傳輸到試算表
+    fetch(gasWebUrl + query, { mode: 'no-cors' })
+    .then(() => {
+        // 3. 傳輸成功後，讓客人在群組自動發話 (這會讓大家看到他填好了)
+        liff.sendMessages([{
+            type: 'text',
+            text: msgText
+        }]).then(() => {
+            alert("回報成功！");
+            liff.closeWindow();
+        }).catch(err => {
+            // 如果發送訊息失敗（例如沒權限），還是關閉視窗，因為後台已經填好了
+            alert("資料已回傳，但無法自動發送訊息：" + err);
+            liff.closeWindow();
+        });
+    })
+    .catch(err => {
+        alert("傳送失敗：" + err);
+        btn.disabled = false;
+        btn.innerText = "確認送出";
+    });
+}
     </script>
 </body>
 </html>
