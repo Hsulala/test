@@ -46,18 +46,27 @@
         }
 
         liff.init({ liffId: "2007905512-tXrWly6E" }).then(() => {
-            if (!liff.isLoggedIn()) {
-                liff.login();
-            } else {
-                const context = liff.getContext();
-                groupId = context.groupId || context.userId;
-                document.getElementById('loading').innerText = "系統已就緒";
-                if (!type) {
-                  type = window.location.search.includes('remit') ? 'remit' : 'cheque';
-                }
-                renderForm();
-            }
-        }).catch(err => alert("LIFF 錯誤: " + err));
+    if (!liff.isLoggedIn()) {
+        liff.login();
+    } else {
+        const context = liff.getContext();
+        
+        // 🔹 強化抓取邏輯：確保抓到的是 C 或 U 開頭的真實 ID
+        groupId = context.groupId || context.roomId || context.userId;
+
+        // 如果抓到的是那串 ceec4... 的無效 ID，提示使用者
+        if (groupId.indexOf('-') !== -1 && groupId.length > 30) {
+            document.getElementById('loading').innerText = "⚠️ 請務必在 LINE 群組內開啟此連結";
+        } else {
+            document.getElementById('loading').innerText = "系統已就緒";
+        }
+        
+        if (!type) {
+            type = window.location.search.includes('remit') ? 'remit' : 'cheque';
+        }
+        renderForm();
+    }
+}).catch(err => alert("LIFF 錯誤: " + err));
 
         function submitData() {
     const btn = document.getElementById('submitBtn');
