@@ -51,15 +51,26 @@
     } else {
         const context = liff.getContext();
         
-        // 🔹 強化抓取邏輯：確保抓到的是 C 或 U 開頭的真實 ID
-        groupId = context.groupId || context.roomId || context.userId;
+        // --- 核心修正開始 ---
+        // 1. 先嘗試從標準 context 抓
+        let rawId = context.groupId || context.roomId || context.userId;
 
-        // 如果抓到的是那串 ceec4... 的無效 ID，提示使用者
-        if (groupId.indexOf('-') !== -1 && groupId.length > 30) {
-            document.getElementById('loading').innerText = "⚠️ 請務必在 LINE 群組內開啟此連結";
+        // 2. 如果抓到的是帶橫線的 UUID (例如 c9a2d431...)，代表抓錯了
+        // 我們強制從解碼的 Token 裡找真實身分
+        if (!rawId || rawId.indexOf('-') !== -1) {
+            const idToken = liff.getDecodedIDToken();
+            if (idToken) {
+                // 如果是群組，Token 裡會有一個 sub 或特殊的 sub 欄位
+                groupId = idToken.sub; 
+            } else {
+                groupId = rawId;
+            }
         } else {
-            document.getElementById('loading').innerText = "系統已就緒";
+            groupId = rawId;
         }
+        // --- 核心修正結束 ---
+
+        document.getElementById('loading').innerText = "系統已就緒 (ID: " + groupId.substring(0,5) + "...)";
         
         if (!type) {
             type = window.location.search.includes('remit') ? 'remit' : 'cheque';
