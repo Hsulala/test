@@ -7,39 +7,64 @@
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
         body { font-family: sans-serif; padding: 20px; background-color: #f8f9fa; }
-        input { width: 100%; padding: 15px; margin-bottom: 15px; box-sizing: border-box; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; }
+        h3 { color: #463629; margin-bottom: 20px; text-align: center; }
+        input { width: 100%; padding: 15px; margin-bottom: 10px; box-sizing: border-box; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; }
         button { width: 100%; padding: 15px; background: #463629; color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; width: 100%; }
         .label { font-size: 14px; color: #666; margin-bottom: 5px; }
+        #loading { text-align: center; color: #999; font-size: 12px; margin-top: 10px; }
     </style>
 </head>
 <body>
     <h3 id="title">載入中...</h3>
     <div id="formArea"></div>
     <button id="submitBtn" onclick="submitData()">確認送出</button>
+    <div id="loading">正在初始化環境...</div>
 
     <script>
-        // ⚠️ 這裡一定要貼上你最新的 GAS 網址 (/exec 結尾)
+        // ⚠️ 這裡填入你最新的 GAS 網址
         const gasWebUrl = "https://script.google.com/macros/s/AKfycbyjzlnr8DFF5FRnfGeImwcbIUrgRIFf40XsOazHGCcsOWkxZbn_IAUCy-PCpXV5N3lv/exec"; 
-        const params = new URLSearchParams(window.location.search);
-        const type = params.get('type');
+        
+        // 強化版：同時從網址與 LIFF 內部抓取參數
+        function getParam(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has(name)) return urlParams.get(name);
+            return null;
+        }
+
+        let type = getParam('type');
         let groupId = "";
 
-        const form = document.getElementById('formArea');
-        if (type === 'remit') {
-            document.getElementById('title').innerText = "回報匯款末五碼";
-            form.innerHTML = '<input type="text" id="code" inputmode="decimal" placeholder="請輸入末五碼">';
-        } else {
-            document.getElementById('title').innerText = "索取回郵信封";
-            form.innerHTML = '<div class="label">收件人姓名</div><input type="text" id="name">' +
-                             '<div class="label">聯絡電話</div><input type="text" id="phone" inputmode="tel">' +
-                             '<div class="label">收件地址</div><input type="text" id="addr">';
+        // 動態生成 UI
+        function renderForm() {
+            const form = document.getElementById('formArea');
+            // 只要 type 包含 remit 關鍵字就顯示末五碼
+            if (type && type.includes('remit')) {
+                document.getElementById('title').innerText = "回報匯款末五碼";
+                form.innerHTML = '<input type="text" id="code" inputmode="decimal" placeholder="請輸入帳號末五碼">';
+            } else {
+                document.getElementById('title').innerText = "索取回郵信封";
+                form.innerHTML = '<div class="label">收件人姓名</div><input type="text" id="name">' +
+                                 '<div class="label">聯絡電話</div><input type="text" id="phone" inputmode="tel">' +
+                                 '<div class="label">收件地址</div><input type="text" id="addr">';
+            }
         }
 
         liff.init({ liffId: "2007905512-tXrWly6E" }).then(() => {
-            const context = liff.getContext();
-            groupId = context.groupId || context.userId;
-            document.getElementById('title').append(" (已就緒)");
-        });
+            if (!liff.isLoggedIn()) {
+                liff.login();
+            } else {
+                const context = liff.getContext();
+                groupId = context.groupId || context.userId;
+                document.getElementById('loading').innerText = "系統已就緒";
+                
+                // 再次嘗試從 LIFF 內部的 URL 抓取參數
+                if (!type) {
+                    const search = window.location.search;
+                    if (search.includes('remit')) type = 'remit';
+                }
+                renderForm();
+            }
+        }).catch(err => alert("LIFF 初始化失敗: " + err));
 
         function submitData() {
             const btn = document.getElementById('submitBtn');
@@ -49,21 +74,23 @@
             let query = `?groupId=${groupId}&type=${type}`;
             if (type === 'remit') {
                 const c = document.getElementById('code').value;
-                if(!c) return alert("請輸入末五碼");
+                if(!c) { btn.disabled = false; return alert("請輸入末五碼"); }
                 query += `&code=${c}`;
             } else {
                 const n = document.getElementById('name').value;
                 const p = document.getElementById('phone').value;
                 const a = document.getElementById('addr').value;
-                if(!n || !p || !a) return alert("請完整填寫");
+                if(!n || !p || !a) { btn.disabled = false; return alert("請填寫完整資訊"); }
                 query += `&name=${encodeURIComponent(n)}&phone=${encodeURIComponent(p)}&addr=${encodeURIComponent(a)}`;
             }
 
-            // 使用背景傳輸，資料不會出現在聊天室
             fetch(gasWebUrl + query, { mode: 'no-cors' }).then(() => {
-                alert("回報成功！資料已隱密傳輸。");
+                alert("回報成功！");
                 liff.closeWindow();
-            }).catch(err => alert("出錯了：" + err));
+            }).catch(err => {
+                alert("傳送失敗：" + err);
+                btn.disabled = false;
+            });
         }
     </script>
 </body>
