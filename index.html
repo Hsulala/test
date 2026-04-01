@@ -3,128 +3,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>資訊回報</title>
+    <title>資訊回報系統</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
         body { font-family: sans-serif; padding: 20px; background-color: #f8f9fa; }
         h3 { color: #463629; margin-bottom: 20px; text-align: center; }
         input { width: 100%; padding: 15px; margin-bottom: 10px; box-sizing: border-box; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; }
-        button { width: 100%; padding: 15px; background: #463629; color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; width: 100%; }
-        .label { font-size: 14px; color: #666; margin-bottom: 5px; }
-        #loading { text-align: center; color: #999; font-size: 12px; margin-top: 10px; }
+        button { width: 100%; padding: 15px; background: #463629; color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; width: 100%; cursor: pointer; }
+        button:disabled { background: #ccc; }
+        .label { font-size: 14px; color: #666; margin-bottom: 5px; font-weight: bold; }
+        #loading { text-align: center; color: #999; font-size: 12px; margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; }
     </style>
 </head>
 <body>
     <h3 id="title">載入中...</h3>
     <div id="formArea"></div>
     <button id="submitBtn" onclick="submitData()">確認送出</button>
-    <div id="loading">正在初始化環境...</div>
+    <div id="loading">正在同步群組資訊...</div>
 
     <script>
+        // 1. 填入你最新的 GAS 部署網址 (/exec 結尾)
         const gasWebUrl = "https://script.google.com/macros/s/AKfycbyjzlnr8DFF5FRnfGeImwcbIUrgRIFf40XsOazHGCcsOWkxZbn_IAUCy-PCpXV5N3lv/exec"; 
         
+        // 2. 取得網址參數的工具
         function getParam(name) {
             const urlParams = new URLSearchParams(window.location.search);
             return urlParams.get(name);
         }
 
+        // 3. 優先從網址抓取機器人帶過來的真實 ID (gid)
         let type = getParam('type');
-        let groupId = "";
+        let groupId = getParam('gid') || getParam('groupId'); 
 
         function renderForm() {
             const form = document.getElementById('formArea');
             if (type && type.includes('remit')) {
                 document.getElementById('title').innerText = "回報匯款末五碼";
-                form.innerHTML = '<input type="text" id="code" inputmode="decimal" placeholder="請輸入帳號末五碼">';
+                form.innerHTML = '<div class="label">帳號末五碼</div><input type="text" id="code" inputmode="decimal" placeholder="請輸入 5 位數字">';
             } else {
-                type = 'cheque'; // 強制校正 type
-                document.getElementById('title').innerText = "索取回郵信封";
-                form.innerHTML = '<div class="label">收件人姓名</div><input type="text" id="name">' +
-                                 '<div class="label">聯絡電話</div><input type="text" id="phone" inputmode="tel">' +
-                                 '<div class="label">收件地址</div><input type="text" id="addr">';
+                type = 'cheque'; 
+                document.getElementById('title').innerText = "索取支票回郵";
+                form.innerHTML = '<div class="label">收件人姓名</div><input type="text" id="name" placeholder="請輸入姓名">' +
+                                 '<div class="label">聯絡電話</div><input type="text" id="phone" inputmode="tel" placeholder="請輸入電話">' +
+                                 '<div class="label">收件地址</div><input type="text" id="addr" placeholder="請輸入收件地址">';
             }
         }
 
+        // 4. 初始化 LIFF
         liff.init({ liffId: "2007905512-tXrWly6E" }).then(() => {
-    if (!liff.isLoggedIn()) {
-        liff.login();
-    } else {
-        const context = liff.getContext();
-        
-        // --- 核心修正開始 ---
-        // 1. 先嘗試從標準 context 抓
-        let rawId = context.groupId || context.roomId || context.userId;
-
-        // 2. 如果抓到的是帶橫線的 UUID (例如 c9a2d431...)，代表抓錯了
-        // 我們強制從解碼的 Token 裡找真實身分
-        if (!rawId || rawId.indexOf('-') !== -1) {
-            const idToken = liff.getDecodedIDToken();
-            if (idToken) {
-                // 如果是群組，Token 裡會有一個 sub 或特殊的 sub 欄位
-                groupId = idToken.sub; 
+            if (!liff.isLoggedIn()) {
+                liff.login();
             } else {
-                groupId = rawId;
+                // 如果網址沒帶 gid，才嘗試用 LIFF 內建抓取 (備援方案)
+                if (!groupId || groupId.indexOf('-') !== -1) {
+                    const context = liff.getContext();
+                    groupId = context.groupId || context.userId;
+                }
+                
+                document.getElementById('loading').innerText = "系統已就緒 (ID: " + groupId.substring(0, 6) + "...)";
+                renderForm();
             }
-        } else {
-            groupId = rawId;
-        }
-        // --- 核心修正結束 ---
+        }).catch(err => alert("LIFF 啟動失敗: " + err));
 
-        document.getElementById('loading').innerText = "系統已就緒 (ID: " + groupId.substring(0,5) + "...)";
-        
-        if (!type) {
-            type = window.location.search.includes('remit') ? 'remit' : 'cheque';
-        }
-        renderForm();
-    }
-}).catch(err => alert("LIFF 錯誤: " + err));
-
+        // 5. 提交資料函式
         function submitData() {
-    const btn = document.getElementById('submitBtn');
-    if(btn.disabled) return;
-    btn.disabled = true;
-    btn.innerText = "傳送中...";
+            const btn = document.getElementById('submitBtn');
+            if (btn.disabled) return;
+            
+            btn.disabled = true;
+            btn.innerText = "傳送中...";
 
-    // 1. 抓取資料
-    let msgText = ""; // 準備發送給群組的文字
-    let query = `?groupId=${groupId}&type=${type}`;
+            let msgText = ""; 
+            let query = `?groupId=${groupId}&type=${type}`;
 
-    if (type === 'remit') {
-        const c = document.getElementById('code').value.trim();
-        if(!c) { btn.disabled = false; return alert("請輸入末五碼"); }
-        query += `&code=${encodeURIComponent(c)}`;
-        msgText = "💰 我已完成匯款回報，末五碼為：" + c;
-    } else {
-        const n = document.getElementById('name').value.trim();
-        const p = document.getElementById('phone').value.trim();
-        const a = document.getElementById('addr').value.trim();
-        if(!n || !p || !a) { btn.disabled = false; return alert("請填寫完整資訊"); }
-        query += `&name=${encodeURIComponent(n)}&phone=${encodeURIComponent(p)}&addr=${encodeURIComponent(a)}`;
-        msgText = "✉️ 我已填寫支票收件資訊，請查收。";
-    }
+            if (type === 'remit') {
+                const c = document.getElementById('code').value.trim();
+                if(!c) { btn.disabled = false; btn.innerText = "確認送出"; return alert("請輸入末五碼"); }
+                query += `&code=${encodeURIComponent(c)}`;
+                msgText = "💰 我已完成匯款回報，末五碼為：" + c;
+            } else {
+                const n = document.getElementById('name').value.trim();
+                const p = document.getElementById('phone').value.trim();
+                const a = document.getElementById('addr').value.trim();
+                if(!n || !p || !a) { btn.disabled = false; btn.innerText = "確認送出"; return alert("請完整填寫收件資訊"); }
+                query += `&name=${encodeURIComponent(n)}&phone=${encodeURIComponent(p)}&addr=${encodeURIComponent(a)}`;
+                msgText = "✉️ 我已填寫支票收件資訊，請查收。";
+            }
 
-    // 2. 先透過 API 隱密傳輸到試算表
-    fetch(gasWebUrl + query, { mode: 'no-cors' })
-    .then(() => {
-        // 3. 傳輸成功後，讓客人在群組自動發話 (這會讓大家看到他填好了)
-        liff.sendMessages([{
-            type: 'text',
-            text: msgText
-        }]).then(() => {
-            alert("回報成功！");
-            liff.closeWindow();
-        }).catch(err => {
-            // 如果發送訊息失敗（例如沒權限），還是關閉視窗，因為後台已經填好了
-            alert("資料已回傳，但無法自動發送訊息：" + err);
-            liff.closeWindow();
-        });
-    })
-    .catch(err => {
-        alert("傳送失敗：" + err);
-        btn.disabled = false;
-        btn.innerText = "確認送出";
-    });
-}
+            // A. 背景傳送到 GAS 試算表
+            fetch(gasWebUrl + query, { mode: 'no-cors' })
+            .then(() => {
+                // B. 傳送成功後，自動在群組發話
+                liff.sendMessages([{
+                    type: 'text',
+                    text: msgText
+                }]).then(() => {
+                    alert("回報成功！");
+                    liff.closeWindow();
+                }).catch(err => {
+                    alert("資料已記錄，但無法自動發送訊息：" + err);
+                    liff.closeWindow();
+                });
+            })
+            .catch(err => {
+                alert("網路傳送失敗：" + err);
+                btn.disabled = false;
+                btn.innerText = "確認送出";
+            });
+        }
     </script>
 </body>
 </html>
